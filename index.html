@@ -1,0 +1,1231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1228">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Firefly Jar">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+:root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px -apple-system, BlinkMacSystemFont, sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Firefly Jar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Nunito:wght@400;600;700&display=swap">
+<style>
+/* Layout: one full-screen night scene on canvas; a quiet HUD on top, one caption under the centre, nothing else. */
+:root {
+  --night: #0e1228;
+  --dusk: #1d2350;
+  --moon: #ece6d2;
+  --moon-dim: #a9a6b8;
+  --ember: #f2c66d;
+  --moss: #18241f;
+  --display: "Young Serif", Georgia, "Times New Roman", serif;
+  --body: "Nunito", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--night);
+  color: var(--moon);
+  font-family: var(--body);
+  font-size: 16px;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+canvas#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+.layer { position: fixed; inset: 0; padding-inline: 16px; pointer-events: none; }
+.layer > * { pointer-events: auto; }
+
+/* Title card */
+#title {
+  display: grid; place-content: center; justify-items: center; text-align: center; gap: 20px;
+  padding-block: 40px;
+  transition: opacity 1.2s ease;
+}
+#title h1 {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(2.6rem, 9vw, 4.2rem); line-height: 1; margin: 0;
+  letter-spacing: 0.01em; text-wrap: balance;
+  text-shadow: 0 0 28px rgba(242,198,109,.25);
+}
+#title p { margin: 0; max-width: 32ch; color: var(--moon-dim); line-height: 1.6; text-wrap: balance; }
+.plan { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.plan span {
+  font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--moon-dim);
+  border: 1px solid rgba(236,230,210,.18); border-radius: 999px; padding: 6px 12px;
+  font-variant-numeric: tabular-nums;
+}
+.btn {
+  font: 700 1rem var(--body); color: var(--night); background: var(--ember);
+  border: 0; border-radius: 999px; padding: 14px 34px; cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(242,198,109,.4), 0 0 30px rgba(242,198,109,.35);
+  transition: transform .2s ease, box-shadow .3s ease;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 0 0 6px rgba(242,198,109,.12), 0 0 40px rgba(242,198,109,.45); }
+.btn.ghost { background: transparent; color: var(--moon); border: 1px solid rgba(236,230,210,.3); box-shadow: none; }
+.btn:focus-visible, .icon:focus-visible, .toggle input:focus-visible + span { outline: 2px solid var(--ember); outline-offset: 3px; }
+.toggle { display: inline-flex; align-items: center; gap: 10px; color: var(--moon-dim); font-size: .92rem; cursor: pointer; }
+.toggle input { position: absolute; opacity: 0; }
+.toggle span {
+  width: 38px; height: 22px; border-radius: 999px; background: rgba(236,230,210,.15); position: relative; transition: background .3s;
+}
+.toggle span::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--moon-dim); transition: transform .3s, background .3s;
+}
+.toggle input:checked + span { background: rgba(242,198,109,.35); }
+.toggle input:checked + span::after { transform: translateX(16px); background: var(--ember); }
+
+/* HUD */
+#hud {
+  bottom: auto; padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+  display: flex; align-items: center; gap: 14px; max-width: 560px; margin-inline: auto;
+  transition: opacity 1s ease;
+}
+.track { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
+.seg { display: grid; gap: 6px; }
+.seg label { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--moon-dim); }
+.bar { height: 3px; border-radius: 3px; background: rgba(236,230,210,.14); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--ember); border-radius: 3px; box-shadow: 0 0 8px var(--ember); }
+.clock { font-variant-numeric: tabular-nums; font-size: .9rem; color: var(--moon-dim); min-width: 3.2ch; text-align: right; }
+.icon {
+  width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(236,230,210,.22);
+  background: rgba(14,18,40,.4); color: var(--moon); cursor: pointer; display: grid; place-items: center; padding: 0;
+}
+.icon svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* Caption under the centrepiece */
+#caption {
+  top: 61%; bottom: auto; text-align: center; display: grid; justify-items: center; gap: 8px;
+  pointer-events: none; transition: opacity .8s ease;
+}
+#caption h2 {
+  font-family: var(--display); font-weight: 400; margin: 0;
+  font-size: clamp(1.7rem, 6vw, 2.4rem); line-height: 1.1; text-wrap: balance;
+}
+#caption .count { font-variant-numeric: tabular-nums; color: var(--ember); }
+#caption p { margin: 0; max-width: 34ch; color: var(--moon-dim); line-height: 1.55; text-wrap: balance; }
+#caption small { font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--moon-dim); opacity: .8; }
+#endbtns {
+  top: auto; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
+  display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; transition: opacity 1s ease;
+}
+#hint {
+  top: auto; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+  text-align: center; font-size: .82rem; color: var(--moon-dim); opacity: .75; pointer-events: none;
+  padding-inline: 90px;
+}
+#dim {
+  position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none;
+  transition: opacity 5s ease; display: grid; place-items: center; color: #3a3a46; font-size: .8rem;
+}
+#dim.on { opacity: .94; pointer-events: auto; }
+.fade { opacity: 0 !important; pointer-events: none !important; }
+.fade * { pointer-events: none !important; }
+
+/* Story and coloring sheet */
+.extras { color: var(--moon-dim); font-size: .9rem; }
+.link { background: none; border: 0; padding: 0 2px; font: inherit; color: var(--ember); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(242,198,109,.4); }
+.link:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; border-radius: 4px; }
+.sheet {
+  position: fixed; inset: 0; z-index: 5; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: rgba(14,18,40,.95); padding-inline: 16px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 14px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px);
+  user-select: text; -webkit-user-select: text;
+}
+.sheet-bar {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  max-width: 640px; margin: 0 auto; padding-block: 8px 14px; background: linear-gradient(rgba(14,18,40,1) 70%, rgba(14,18,40,0));
+}
+.sheet-bar h3 { margin: 0; font: .75rem var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--moon-dim); }
+.btn.small { padding: 9px 20px; font-size: .9rem; }
+.story { max-width: 34em; margin: 0 auto; font-size: 1.12rem; line-height: 1.85; color: #d9d3c0; }
+.story h4 { font: 400 clamp(1.7rem, 6vw, 2.2rem)/1.15 var(--display); color: var(--moon); margin: 8px 0 22px; text-wrap: balance; }
+.story p { margin: 0 0 1.1em; }
+.story .fin { text-align: center; color: var(--ember); letter-spacing: .4em; margin-top: 28px; }
+.story-nav { display: flex; justify-content: center; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
+.colorwrap { max-width: 640px; margin: 0 auto; display: grid; justify-items: center; gap: 18px; }
+.colorwrap p { margin: 0; color: var(--moon-dim); font-size: .92rem; text-align: center; }
+#mandala { width: min(100%, 62vh, 520px); height: auto; aspect-ratio: 1; touch-action: manipulation; }
+#mandala path, #mandala circle { stroke: rgba(236,230,210,.55); stroke-width: 1.2; cursor: pointer; transition: fill .35s ease; }
+.swatches { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; max-width: 470px; }
+.sw { width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(236,230,210,.2); cursor: pointer; padding: 0; }
+.sw[aria-pressed="true"] { border-color: var(--moon); box-shadow: 0 0 0 3px rgba(236,230,210,.18); }
+.sw:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.choices { display: grid; gap: 12px; width: min(240px, 100%); margin-top: 8px; }
+.choices .btn { width: 100%; }
+#mute { position: fixed; z-index: 6; left: 16px; top: calc(env(safe-area-inset-top, 0px) + 16px); }
+#hud { padding-left: 66px; }
+.sheet-bar { padding-left: 50px; }
+#mandala.finished { filter: drop-shadow(0 0 18px rgba(242,198,109,.45)); transition: filter 1s ease; }
+.lengths { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 6px; }
+.lengths button {
+  font: 600 .85rem var(--body); font-variant-numeric: tabular-nums; color: var(--moon-dim);
+  width: 34px; height: 30px; border-radius: 999px; border: 1px solid rgba(236,230,210,.18); background: transparent; cursor: pointer; padding: 0;
+}
+.lengths button[aria-checked="true"] { color: var(--night); background: var(--moon); border-color: var(--moon); }
+.lengths button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.lengths span { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--moon-dim); margin-left: 4px; }
+.plantbox { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); display: grid; justify-items: center; gap: 2px; padding-inline: 16px; }
+#plant { width: 150px; height: 160px; }
+#title #welcome { font-size: .88rem; color: var(--moon-dim); max-width: 30ch; line-height: 1.45; }
+@media (max-height: 700px) { #plant { width: 110px; height: 117px; } #title { gap: 14px; } }
+#hud.solo .track { grid-template-columns: 1fr; }
+#hud.solo #segBreathe { display: none; }
+</style>
+</head>
+<body>
+
+
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<section id="title" class="layer">
+  <div class="plantbox">
+    <canvas id="plant" width="150" height="160" role="img" aria-label="Your plant"></canvas>
+    <p id="welcome"></p>
+  </div>
+  <div class="choices">
+    <button class="btn" id="begin">Stretch &amp; breathe</button>
+    <div class="lengths" role="radiogroup" aria-label="Session length">
+      <button role="radio" data-min="2">2</button><button role="radio" data-min="4">4</button><button role="radio" data-min="6">6</button><button role="radio" data-min="8">8</button><button role="radio" data-min="10">10</button><span>min</span>
+    </div>
+    <button class="btn ghost" id="snow">Legs stretch</button>
+    <button class="btn ghost" id="tColor">Coloring</button>
+    <button class="btn ghost" id="tStory">Story</button>
+  </div>
+</section>
+
+<button class="icon" id="mute" aria-label="Mute music" aria-pressed="false"></button>
+
+<header id="hud" class="layer fade">
+  <div class="track">
+    <div class="seg"><label>Stretch</label><div class="bar"><i id="b2"></i></div></div>
+    <div class="seg" id="segBreathe"><label>Breathe</label><div class="bar"><i id="b1"></i></div></div>
+  </div>
+  <button class="icon" id="pause" aria-label="Pause"><svg viewBox="0 0 16 16"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg></button>
+</header>
+
+<div id="caption" class="layer fade" aria-live="polite">
+  <small id="cap-eyebrow"></small>
+  <h2 id="cap-title"></h2>
+  <p id="cap-text"></p>
+</div>
+
+<div id="hint" class="layer fade"></div>
+
+<div id="endbtns" class="layer fade">
+  <button class="btn ghost" id="eStory">Read a story</button>
+  <button class="btn ghost" id="eColor">Coloring</button>
+  <button class="btn" id="dimBtn">Dim the screen</button>
+  <button class="btn ghost" id="again">Home</button>
+</div>
+
+<section id="sheet" class="sheet" hidden aria-modal="true" role="dialog" aria-labelledby="sheet-title">
+  <div class="sheet-bar"><h3 id="sheet-title"></h3><button class="btn ghost small" id="sheetClose">Done</button></div>
+  <div id="sheet-body"></div>
+</section>
+
+<div id="dim">tap to wake</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('sky');
+  const ctx = cv.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const C = {
+    night: css.getPropertyValue('--night').trim(),
+    dusk: css.getPropertyValue('--dusk').trim(),
+    moon: css.getPropertyValue('--moon').trim(),
+    ember: css.getPropertyValue('--ember').trim(),
+    moss: css.getPropertyValue('--moss').trim(),
+  };
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let W = 0, H = 0, S = 1;
+  let stars = [];
+  function resize() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    S = Math.min(W, H * 0.8) / 380;
+    if (!stars.length) {
+      for (let i = 0; i < 160; i++) stars.push({ x: Math.random(), y: Math.random() * 0.7, r: Math.random() * 1.2 + 0.3, ph: Math.random() * 6.28, sp: 0.4 + Math.random() * 1.2, gold: false });
+    }
+  }
+  addEventListener('resize', resize); resize();
+
+  // ---------- Content ----------
+  const BREATH_IN = 6, BREATH_OUT = 10, CYCLE = BREATH_IN + BREATH_OUT;
+  let BREATHS = 8;
+  let STRETCH_LEN = 20;
+  const STRETCHES = [
+    { name: 'Neck tilt', cue: 'Let your right ear drift toward your shoulder, then the left.' },
+    { name: 'Shoulder rolls', cue: 'Roll your shoulders up, back and down. Slowly.' },
+    { name: 'Reach for the moon', cue: 'Raise both arms overhead and grow a little taller.' },
+    { name: 'Lean left', cue: 'Arms up, bend gently to the left. Breathe into your right side.' },
+    { name: 'Lean right', cue: 'Now to the right. Keep it soft, no bouncing.' },
+    { name: 'Self hug', cue: 'Wrap your arms around yourself and sway side to side.' },
+    { name: 'Child\u2019s pose', cue: 'Kneel, sit back on your heels and fold forward. Rest your forehead down and let your arms reach ahead.' },
+  ];
+  // Bedtime: the stretches above, each timed from the chosen session length.
+  // After snowboarding: a fixed 10-minute routine for legs, hips and back, no breathing section.
+  const SNOW = [
+    { name: 'Neck release', cue: 'Ear toward shoulder, then the other side. Let the goggles-and-helmet tension go.', dur: 35, front: 0 },
+    { name: 'Shoulder rolls', cue: 'Big slow circles, up, back and down.', dur: 25, front: 1 },
+    { name: 'Quad stretch \u00b7 left', cue: 'Stand tall, hold your left foot behind you and draw the heel toward your seat. Knees side by side.', dur: 35, side: 'quad' },
+    { name: 'Quad stretch \u00b7 right', cue: 'Switch. Right heel toward your seat. Hold a wall if you need balance.', dur: 35, side: 'quad', mirror: true },
+    { name: 'Low lunge \u00b7 left', cue: 'Left foot forward, right knee down. Tuck your tailbone and ease your hips forward.', dur: 40, side: 'lunge' },
+    { name: 'Low lunge \u00b7 right', cue: 'Switch sides. Feel the front of the back hip open.', dur: 40, side: 'lunge', mirror: true },
+    { name: 'Hamstring stretch \u00b7 left', cue: 'Shift your hips back, left leg straight, toes up. Fold forward from the hips.', dur: 35, side: 'hamstring' },
+    { name: 'Hamstring stretch \u00b7 right', cue: 'Other leg. Keep your back long rather than reaching for your toes.', dur: 35, side: 'hamstring', mirror: true },
+    { name: 'Calf stretch \u00b7 left', cue: 'Hands on a wall, left leg back and straight, heel pressing down.', dur: 30, side: 'calf' },
+    { name: 'Calf stretch \u00b7 right', cue: 'Switch legs. Boots are hard on calves, so give this one time.', dur: 30, side: 'calf', mirror: true },
+    { name: 'Figure four \u00b7 left', cue: 'Lie down, left ankle over right knee, and draw the legs toward you.', dur: 40, side: 'figure4' },
+    { name: 'Figure four \u00b7 right', cue: 'Switch sides. A deep stretch for glutes that worked all day.', dur: 40, side: 'figure4', mirror: true },
+    { name: 'Knees to chest', cue: 'Hug both knees in and rock gently side to side to ease your lower back.', dur: 40, side: 'knees' },
+    { name: 'Cat and cow', cue: 'On hands and knees, round your back as you breathe out, let it dip as you breathe in.', dur: 40, side: 'catcow' },
+    { name: 'Child\u2019s pose', cue: 'Knees wide, sit back on your heels and rest your forehead down.', dur: 55, side: 'child' },
+    { name: 'Seated forward fold', cue: 'Legs long in front of you. Fold forward slowly and let your head hang.', dur: 45, side: 'fold' },
+  ];
+  let PROGRAM = [], withBreath = true;
+  const programTotal = () => PROGRAM.reduce((a, st) => a + st.dur, 0);
+  function stretchAt(c) {
+    let acc = 0;
+    for (let i = 0; i < PROGRAM.length; i++) {
+      if (c < acc + PROGRAM[i].dur || i === PROGRAM.length - 1) return [i, c - acc];
+      acc += PROGRAM[i].dur;
+    }
+  }
+  // Side-view poses as joint points (x right, y up from the floor), b = slow breath 0..1.
+  const SIDE = {
+    quad: b => ({ head: [3, 158], sh: [0, 136], mid: [0, 107], hip: [0, 78], k1: [5, 38], f1: [-22, 70 + 3 * b], k2: [0, 40], f2: [0, 0],
+      el: [-14, 106], ha: [-24, 74 + 3 * b], el2: [20, 118], ha2: [38, 114] }),
+    lunge: b => ({ head: [8 + 3 * b, 118], sh: [5 + 3 * b, 96], mid: [3 + 2 * b, 66], hip: [2 + 4 * b, 34 - 3 * b], k1: [40, 36], f1: [46, 0], k2: [-34, 2], f2: [-72, 2],
+      el: [24, 72], ha: [38, 48], el2: [22, 72], ha2: [36, 50] }),
+    hamstring: b => ({ head: [56 + 5 * b, 62 - 4 * b], sh: [38 + 4 * b, 70 - 3 * b], mid: [10, 74], hip: [-8, 38], k1: [28, 22], f1: [64, 8], k2: [-8, 2], f2: [-44, 2],
+      el: [50, 48 - 2 * b], ha: [60 + 2 * b, 28], el2: [48, 49], ha2: [58, 29] }),
+    calf: b => ({ head: [42 + 2 * b, 146], sh: [30 + 2 * b, 128], mid: [14, 102], hip: [2 + 3 * b, 74], k1: [42 + 2 * b, 38], f1: [38, 0], k2: [-22, 38], f2: [-50, 0],
+      el: [50, 124], ha: [68, 130], el2: [50, 122], ha2: [68, 126], wall: 72 }),
+    figure4: b => ({ head: [-92, 12], sh: [-70, 9], mid: [-35, 12], hip: [0, 9], k2: [20 - 3 * b, 54], f2: [48 - 3 * b, 38], k1: [42 - 2 * b, 30], f1: [24 - 3 * b, 52],
+      el: [-36, 40], ha: [12 - 3 * b, 48], el2: [-34, 38], ha2: [14 - 3 * b, 46], floor: true }),
+    knees: b => ({ head: [-92, 12], sh: [-70, 9], mid: [-35, 11], hip: [0, 9], k1: [10 - 6 * b, 52], f1: [36 - 6 * b, 40], k2: [12 - 6 * b, 50], f2: [38 - 6 * b, 38],
+      el: [-30, 38], ha: [14 - 6 * b, 50], el2: [-28, 36], ha2: [16 - 6 * b, 48], floor: true }),
+    catcow: b => ({ head: [62 - 6 * b, 72 - 34 * b], sh: [40, 58], mid: [5, 40 + 42 * b], hip: [-30, 58], k1: [-30, 2], f1: [-66, 2], k2: [-28, 2], f2: [-64, 2],
+      el: [40, 30], ha: [40, 0], el2: [42, 30], ha2: [42, 0] }),
+    child: b => ({ head: [-20, 12], sh: [-4, 20], mid: [30, 52 + 5 * b], hip: [60, 26], k1: [18, 0], f1: [74, 0], k2: [20, 0], f2: [76, 0],
+      el: [-42, 7], ha: [-80 - 2 * b, 4], el2: [-40, 8], ha2: [-78 - 2 * b, 5] }),
+    fold: b => ({ head: [30 + 6 * b, 30 - 4 * b], sh: [14 + 5 * b, 38 - 4 * b], mid: [-14, 46], hip: [-30, 6], k1: [10, 8], f1: [52, 6], k2: [12, 7], f2: [54, 5],
+      el: [30 + 3 * b, 22], ha: [46 + 4 * b, 14], el2: [32 + 3 * b, 21], ha2: [48 + 4 * b, 13] }),
+  };
+  const SIDE_KEYS = ['head', 'sh', 'mid', 'hip', 'k1', 'f1', 'k2', 'f2', 'el', 'ha', 'el2', 'ha2'];
+  function sideTarget(st, t) {
+    const b = 0.5 - 0.5 * Math.cos(t * TAU / 8);
+    const raw = SIDE[st.side](b), out = { wall: raw.wall, floor: raw.floor };
+    const m = st.mirror ? -1 : 1;
+    SIDE_KEYS.forEach(k => { out[k] = [raw[k][0] * m, raw[k][1]]; });
+    if (out.wall) out.wall *= m;
+    return out;
+  }
+  function lerpSide(A, B, k) { const o = { wall: B.wall, floor: B.floor }; SIDE_KEYS.forEach(n => { o[n] = [lerp(A[n][0], B[n][0], k), lerp(A[n][1], B[n][1], k)]; }); return o; }
+  let sideCur = null, sideFrom = null, viewMix = 0;
+  const NEUTRAL = { a: 0, head: 0, sh: 0, lu: 0.12, lf: 0.08, ru: 0.12, rf: 0.08 };
+  const TAU = Math.PI * 2;
+  function targetPose(i, t) {
+    const p = { ...NEUTRAL };
+    switch (i) {
+      case 0: p.head = 0.42 * Math.sin(t * TAU / 5); break;
+      case 1: p.sh = -7 * (0.5 - 0.5 * Math.cos(t * TAU / 3.3)); p.a = 0; break;
+      case 2: { const w = 0.04 * Math.sin(t * 1.4); p.lu = p.lf = p.ru = p.rf = Math.PI - 0.18 + w; break; }
+      case 3: p.a = -0.3 - 0.05 * Math.sin(t * 1.3); p.lu = p.ru = Math.PI - 0.25; p.lf = p.rf = Math.PI - 0.15; p.head = -0.1; break;
+      case 4: p.a = 0.3 + 0.05 * Math.sin(t * 1.3); p.lu = p.ru = Math.PI - 0.25; p.lf = p.rf = Math.PI - 0.15; p.head = 0.1; break;
+      case 5: p.a = 0.13 * Math.sin(t * TAU / 4); p.lu = 0.38; p.ru = 0.38; p.lf = -1.95; p.rf = -1.8; p.head = p.a * 0.6; break;
+    }
+    return p;
+  }
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const ease = x => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+  const lerpPose = (A, B, k) => { const o = {}; for (const key in A) o[key] = lerp(A[key], B[key], k); return o; };
+
+  // ---------- State ----------
+  let mode = 'title';      // title | breathe | stretch | jar | released
+  let clock = 0;           // seconds into the current mode
+  let paused = false;
+  let pressed = false, pressedAny = false, syncGood = 0;
+  let lastCycle = 0, lastStretch = -1;
+  let pose = { ...NEUTRAL }, poseFrom = { ...NEUTRAL };
+  let flies = [];
+  let jar = { x: 0, y: 0, s: 0.8, open: 0 };
+  let releaseAt = 0;
+  const ambient = Array.from({ length: 7 }, () => ({ x: Math.random(), y: 0.72 + Math.random() * 0.2, ph: Math.random() * 6.28 }));
+
+  // ---------- Sound ----------
+  let ac = null, pad = null, pianoBus = null;
+  // Generative piano: a slow Fmaj9 / C/E / Dm9 / G6 loop, one soft note per beat, with a long reverb.
+  const CHORDS = [
+    { bass: 41, tones: [57, 60, 64, 67, 69, 72] },
+    { bass: 40, tones: [55, 60, 64, 67, 72, 76] },
+    { bass: 38, tones: [57, 60, 62, 65, 69, 74] },
+    { bass: 43, tones: [55, 59, 62, 64, 67, 71] },
+  ];
+  const BEAT = 1.7;
+  let nextBeat = 0, beatNo = 0, lastTone = 64;
+  function startPiano() {
+    pianoBus = ac.createGain(); pianoBus.gain.value = 0;
+    pianoBus.gain.setTargetAtTime(0.16, ac.currentTime, 2);
+    const sr = ac.sampleRate, len = sr * 3.5;
+    const ir = ac.createBuffer(2, len, sr);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+    const verb = ac.createConvolver(); verb.buffer = ir;
+    const wet = ac.createGain(); wet.gain.value = 0.55;
+    const tone = ac.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 2200;
+    pianoBus.connect(tone);
+    tone.connect(ac.destination);
+    tone.connect(verb).connect(wet).connect(ac.destination);
+    nextBeat = ac.currentTime + 1.2; beatNo = 0;
+  }
+  function pnote(m, t, vel) {
+    const f = 440 * Math.pow(2, (m - 69) / 12);
+    const dur = 2.5 + (80 - m) * 0.08;
+    [[1, 1, 1], [2, 0.35, 0.6], [3, 0.12, 0.4], [4, 0.05, 0.3]].forEach(([h, amp, dk]) => {
+      const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f * h * (1 + (h - 1) * 0.0007);
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vel * amp, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur * dk);
+      o.connect(g).connect(pianoBus); o.start(t); o.stop(t + dur * dk + 0.05);
+    });
+  }
+  function schedulePiano() {
+    if (!ac || !pianoBus) return;
+    while (nextBeat < ac.currentTime + 0.3) {
+      const ch = CHORDS[Math.floor(beatNo / 4) % CHORDS.length], pos = beatNo % 4;
+      if (pos === 0) pnote(ch.bass, nextBeat, 0.32);
+      if (pos === 0 || Math.random() < 0.7) {
+        // step to a nearby chord tone so the line wanders instead of jumping
+        const near = ch.tones.filter(n => Math.abs(n - lastTone) <= 5 && n !== lastTone);
+        const n = (near.length ? near : ch.tones)[Math.floor(Math.random() * (near.length || ch.tones.length))];
+        lastTone = n;
+        pnote(n, nextBeat + Math.random() * 0.04, 0.16 + Math.random() * 0.08);
+        if (pos === 2 && Math.random() < 0.3) pnote(n - (ch.tones.includes(n - 3) ? 3 : 4), nextBeat + 0.25, 0.09);
+      }
+      nextBeat += BEAT + (pos === 3 ? 0.3 : 0);
+      beatNo++;
+    }
+  }
+  // Phones: iPhones mute Web Audio when the ring/silent switch is on unless the page is
+  // marked as media playback; a looping silent <audio> element does that on older iOS.
+  let silentEl = null;
+  function unlockPhoneAudio() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    try {
+      if (!silentEl) {
+        const rate = 8000, n = rate / 2, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+        const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+        w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+        v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+        v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+        w(36, 'data'); v.setUint32(40, n * 2, true);
+        silentEl = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+        silentEl.loop = true; silentEl.setAttribute('playsinline', '');
+      }
+      silentEl.play().catch(() => {});
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && ac && ac.state !== 'running') ac.resume().catch(() => {}); });
+  let soundOn = true;
+  try { soundOn = localStorage.getItem('ffj-mute') !== '1'; } catch (e) {}
+  const ICON_ON = '<svg viewBox="0 0 16 16"><path d="M2 6h2.5L8 3v10L4.5 10H2z"/><path d="M10.5 5.2a3.5 3.5 0 0 1 0 5.6M12.3 3.4a6 6 0 0 1 0 9.2" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>';
+  const ICON_OFF = '<svg viewBox="0 0 16 16"><path d="M2 6h2.5L8 3v10L4.5 10H2z"/><path d="M10.5 6l4 4M14.5 6l-4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+  function drawMute() {
+    $('mute').innerHTML = soundOn ? ICON_ON : ICON_OFF;
+    $('mute').setAttribute('aria-label', soundOn ? 'Mute music' : 'Play music');
+    $('mute').setAttribute('aria-pressed', String(!soundOn));
+  }
+  drawMute();
+  $('mute').addEventListener('click', () => {
+    soundOn = !soundOn; drawMute();
+    try { localStorage.setItem('ffj-mute', soundOn ? '0' : '1'); } catch (e) {}
+    if (!soundOn) { if (ac) ac.suspend().catch(() => {}); }
+    else if (ac) { unlockPhoneAudio(); ac.resume().catch(() => {}); }
+    else startSound(false);
+  });
+  function startSound(withHum = true) {
+    if (!soundOn) return;
+    unlockPhoneAudio();
+    try {
+      if (!ac) {
+        ac = new (window.AudioContext || window.webkitAudioContext)();
+        startPiano();
+      }
+      if (ac.state !== 'running') ac.resume().catch(() => {});
+      if (pad || !withHum) return;
+      const g = ac.createGain(); g.gain.value = 0;
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600;
+      [110, 164.81, 220.5].forEach((f, i) => {
+        const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+        const og = ac.createGain(); og.gain.value = [1, 0.5, 0.25][i];
+        o.connect(og).connect(lp); o.start();
+      });
+      lp.connect(g).connect(ac.destination);
+      pad = g;
+    } catch (e) { ac = null; pad = null; }
+  }
+  function padLevel(v) { if (pad && ac) pad.gain.setTargetAtTime(paused ? 0 : v, ac.currentTime, 0.25); }
+  function chime(f = 880) {
+    if (!ac) return;
+    const t = ac.currentTime;
+    [f, f * 1.5].forEach((fr, i) => {
+      const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = fr;
+      const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05 / (i + 1), t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+      o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 2.3);
+    });
+  }
+  function stopSound() { if (pad && ac) pad.gain.setTargetAtTime(0, ac.currentTime, 1.2); pad = null; } // piano keeps playing
+
+  let wake = null;
+  async function keepAwake() { try { wake = await navigator.wakeLock?.request('screen'); } catch (e) { wake = null; } }
+
+  // ---------- UI helpers ----------
+  const show = (el, on) => el.classList.toggle('fade', !on);
+  let capKey = '';
+  function caption(eyebrow, title, text) {
+    const key = eyebrow + '|' + title + '|' + text;
+    if (key === capKey) return; capKey = key;
+    $('cap-eyebrow').textContent = eyebrow;
+    $('cap-title').innerHTML = title;
+    $('cap-text').textContent = text;
+  }
+  function fmt(s) { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+  // Session length: half stretching (split across the stretches), half breathing (whole 16 s breaths).
+  let minutes = 4;
+  try { const m = +localStorage.getItem('ffj-minutes'); if ([2, 4, 6, 8, 10].includes(m)) minutes = m; } catch (e) {}
+  function drawLengths() {
+    document.querySelectorAll('.lengths button').forEach(b => {
+      const on = +b.dataset.min === minutes;
+      b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1;
+      b.setAttribute('aria-label', b.dataset.min + ' minutes');
+    });
+  }
+  document.querySelectorAll('.lengths button').forEach(b => b.addEventListener('click', () => {
+    minutes = +b.dataset.min; drawLengths();
+    try { localStorage.setItem('ffj-minutes', String(minutes)); } catch (e) {}
+  }));
+  drawLengths();
+  function begin(kind = 'bedtime') {
+    const half = minutes * 60 / 2;
+    if (kind === 'snow') { PROGRAM = SNOW; withBreath = false; }
+    else {
+      STRETCH_LEN = half / STRETCHES.length;
+      BREATHS = Math.max(2, Math.round(half / CYCLE));
+      PROGRAM = STRETCHES.map((st, i) => ({ ...st, dur: STRETCH_LEN, ...(i === STRETCHES.length - 1 ? { side: 'child' } : { front: i }) }));
+      withBreath = true;
+    }
+    $('hud').classList.toggle('solo', !withBreath);
+    sideCur = null; sideFrom = null; viewMix = 0;
+    flies = []; stars.forEach(s => s.gold = false); stars = stars.filter(s => !s.added);
+    mode = 'stretch'; clock = 0; lastCycle = 0; lastStretch = -1; paused = false; syncGood = 0; pressedAny = false;
+    pose = { ...NEUTRAL }; poseFrom = { ...NEUTRAL };
+    $('b1').style.width = '0%'; $('b2').style.width = '0%';
+    show($('title'), false); show($('hud'), true); show($('caption'), true); show($('hint'), true); show($('endbtns'), false);
+    $('hint').textContent = withBreath ? 'Stand or sit tall. Move only as far as feels easy.' : 'Go gently. Ease off if anything pinches.';
+    startSound(); keepAwake();
+  }
+  $('begin').addEventListener('click', () => begin('bedtime'));
+  $('snow').addEventListener('click', () => begin('snow'));
+  $('again').addEventListener('click', () => {
+    $('dim').classList.remove('on');
+    mode = 'title'; flies = []; paused = false;
+    show($('title'), true); show($('hud'), false); show($('caption'), false); show($('hint'), false); show($('endbtns'), false);
+    welcomeText();
+  });
+  $('dimBtn').addEventListener('click', () => { $('dim').classList.add('on'); });
+  $('dim').addEventListener('click', () => $('dim').classList.remove('on'));
+  function togglePause() {
+    if (mode !== 'breathe' && mode !== 'stretch') return;
+    paused = !paused;
+    $('pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
+    $('pause').innerHTML = paused
+      ? '<svg viewBox="0 0 16 16"><path d="M4 2.5v11a.6.6 0 0 0 .9.5l9-5.5a.6.6 0 0 0 0-1l-9-5.5a.6.6 0 0 0-.9.5z"/></svg>'
+      : '<svg viewBox="0 0 16 16"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg>';
+  }
+  $('pause').addEventListener('click', togglePause);
+
+  cv.addEventListener('pointerdown', e => {
+    if (mode === 'jar') { tryOpenJar(e.clientX, e.clientY); return; }
+    pressed = true; if (mode === 'breathe') pressedAny = true;
+  });
+  addEventListener('pointerup', () => pressed = false);
+  addEventListener('pointercancel', () => pressed = false);
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' && !e.repeat && document.activeElement === document.body) { e.preventDefault(); pressed = true; if (mode === 'breathe') pressedAny = true; if (mode === 'jar') openJar(); }
+    if (e.key === 'p' || e.key === 'P') togglePause();
+  });
+  addEventListener('keyup', e => { if (e.code === 'Space') pressed = false; });
+
+  // ---------- Fireflies ----------
+  function spawnFly(x, y, bright) {
+    flies.push({ state: 'fly', sx: x, sy: y, x, y, t: 0, u: (Math.random() * 2 - 1) * 0.6, v: (Math.random() * 2 - 1) * 0.6, vu: 0, vv: 0, ph: Math.random() * 6.28, bright });
+  }
+  function jarPoint(f) { return { x: jar.x + f.u * 22 * jar.s * S, y: jar.y + 6 * jar.s * S + f.v * 26 * jar.s * S }; }
+  function tryOpenJar(x, y) {
+    const d = Math.hypot(x - jar.x, y - jar.y);
+    if (d < 90 * jar.s * S) openJar();
+  }
+  function openJar() {
+    if (mode !== 'jar') return;
+    mode = 'released'; releaseAt = clock;
+    flies.forEach((f, i) => {
+      const p = jarPoint(f);
+      f.state = 'free'; f.sx = p.x; f.sy = p.y; f.t = -i * 0.35;
+      f.tx = W * (0.12 + Math.random() * 0.76); f.ty = H * (0.06 + Math.random() * 0.36);
+    });
+    stopSound();
+  }
+
+  // ---------- Drawing ----------
+  function drawSky(t) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, C.night); g.addColorStop(0.75, C.dusk); g.addColorStop(1, '#2a2a55');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    for (const s of stars) {
+      const tw = reduced ? 0.8 : 0.55 + 0.45 * Math.sin(t * s.sp + s.ph);
+      ctx.globalAlpha = tw * (s.added ? Math.min(1, s.fade) : 1);
+      ctx.fillStyle = s.gold ? C.ember : C.moon;
+      ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r * (s.gold ? 1.6 : 1), 0, TAU); ctx.fill();
+      if (s.gold) { ctx.globalAlpha *= 0.25; ctx.beginPath(); ctx.arc(s.x * W, s.y * H, 6, 0, TAU); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
+    // crescent moon
+    const mx = W * 0.84, my = H * 0.12, mr = 22 * S;
+    ctx.save();
+    ctx.shadowColor = 'rgba(236,230,210,.5)'; ctx.shadowBlur = 40;
+    ctx.fillStyle = C.moon; ctx.beginPath(); ctx.arc(mx, my, mr, 0, TAU); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = C.night; ctx.beginPath(); ctx.arc(mx + mr * 0.45, my - mr * 0.25, mr * 0.88, 0, TAU); ctx.fill();
+    // hills
+    hill(H * 0.86, 0.008, 18, '#151b3a', 0);
+    hill(H * 0.9, 0.012, 12, C.moss, 2);
+    // cabin
+    const cx = W * 0.16, cy = H * 0.86 + 2;
+    const cs = 1.1 * S;
+    ctx.fillStyle = '#0d1311';
+    ctx.beginPath(); ctx.moveTo(cx - 26 * cs, cy); ctx.lineTo(cx - 26 * cs, cy - 26 * cs); ctx.lineTo(cx, cy - 46 * cs); ctx.lineTo(cx + 26 * cs, cy - 26 * cs); ctx.lineTo(cx + 26 * cs, cy); ctx.fill();
+    ctx.fillRect(cx + 10 * cs, cy - 50 * cs, 7 * cs, 16 * cs);
+    ctx.save(); ctx.shadowColor = C.ember; ctx.shadowBlur = 18;
+    ctx.fillStyle = C.ember; ctx.globalAlpha = 0.85 + (reduced ? 0 : 0.1 * Math.sin(t * 1.7));
+    ctx.fillRect(cx - 9 * cs, cy - 20 * cs, 10 * cs, 10 * cs); ctx.restore(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#0d1311'; ctx.lineWidth = 1.5 * cs; ctx.beginPath(); ctx.moveTo(cx - 4 * cs, cy - 20 * cs); ctx.lineTo(cx - 4 * cs, cy - 10 * cs); ctx.moveTo(cx - 9 * cs, cy - 15 * cs); ctx.lineTo(cx + 1 * cs, cy - 15 * cs); ctx.stroke();
+    // ambient fireflies over the grass
+    for (const a of ambient) {
+      const x = a.x * W + Math.sin(t * 0.3 + a.ph) * 30, y = a.y * H + Math.cos(t * 0.4 + a.ph) * 10;
+      glow(x, y, 1.6, 0.25 + 0.25 * Math.sin(t * 1.3 + a.ph));
+    }
+  }
+  function hill(base, freq, amp, color, off) {
+    ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(0, H);
+    for (let x = 0; x <= W + 10; x += 10) ctx.lineTo(x, base + Math.sin(x * freq + off) * amp + Math.sin(x * freq * 2.7 + off) * amp * 0.4);
+    ctx.lineTo(W, H); ctx.fill();
+  }
+  function glow(x, y, r, a) {
+    const rg = ctx.createRadialGradient(x, y, 0, x, y, r * 7);
+    rg.addColorStop(0, `rgba(242,198,109,${a})`); rg.addColorStop(1, 'rgba(242,198,109,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(x, y, r * 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = `rgba(255,236,180,${Math.min(1, a * 1.6)})`; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  }
+  function ring(cx, cy, r, k) {
+    ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(236,230,210,.12)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = C.ember; ctx.globalAlpha = 0.7;
+    ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + TAU * k); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  function drawOrb(b, t) {
+    const cx = W / 2, cy = H * 0.4, base = 92 * S;
+    const r = base * (0.5 + 0.5 * b);
+    ring(cx, cy, base + 18 * S, clock / (CYCLE * BREATHS));
+    const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 1.9);
+    rg.addColorStop(0, `rgba(242,198,109,${0.32 + 0.25 * b})`); rg.addColorStop(0.5, 'rgba(242,198,109,.08)'); rg.addColorStop(1, 'rgba(242,198,109,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(cx, cy, r * 1.9, 0, TAU); ctx.fill();
+    ctx.fillStyle = `rgba(255,236,190,${0.75 + 0.2 * b})`;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0, TAU); ctx.fill();
+    ctx.strokeStyle = `rgba(236,230,210,${pressed ? 0.6 : 0.22})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+  }
+  function drawFigure(p, k, alpha = 1) {
+    const cx = W / 2, cy = H * 0.4, s = S * 0.95;
+    ring(cx, cy, 110 * S, k);
+    const hip = { x: cx, y: cy + 42 * s };
+    const up = a => ({ x: Math.sin(a), y: -Math.cos(a) });
+    const dn = phi => ({ x: Math.sin(phi), y: Math.cos(phi) });
+    const tu = up(p.a);
+    const neck = { x: hip.x + tu.x * 62 * s, y: hip.y + tu.y * 62 * s };
+    const hu = up(p.a + p.head);
+    const head = { x: neck.x + hu.x * 20 * s, y: neck.y + hu.y * 20 * s };
+    const perp = { x: Math.cos(p.a), y: Math.sin(p.a) };
+    const shL = { x: neck.x - perp.x * 17 * s, y: neck.y - perp.y * 17 * s + 6 * s + p.sh * s };
+    const shR = { x: neck.x + perp.x * 17 * s, y: neck.y + perp.y * 17 * s + 6 * s + p.sh * s };
+    const arm = (sh, side, u, f) => {
+      const d1 = dn(side * u - p.a), d2 = dn(side * f - p.a);
+      const el = { x: sh.x + d1.x * 30 * s, y: sh.y + d1.y * 30 * s };
+      const wr = { x: el.x + d2.x * 28 * s, y: el.y + d2.y * 28 * s };
+      return [sh, el, wr];
+    };
+    if (alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = C.moon; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(242,198,109,.55)'; ctx.shadowBlur = 16;
+    ctx.lineWidth = 7 * s;
+    const line = pts => { ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke(); };
+    line([{ x: hip.x - 12 * s, y: hip.y + 72 * s }, { x: hip.x - 8 * s, y: hip.y + 4 * s }, hip, { x: hip.x + 8 * s, y: hip.y + 4 * s }, { x: hip.x + 12 * s, y: hip.y + 72 * s }]);
+    line([hip, neck]);
+    line([shL, shR]);
+    line(arm(shR, 1, p.ru, p.rf));
+    line(arm(shL, -1, p.lu, p.lf));
+    ctx.fillStyle = C.moon; ctx.beginPath(); ctx.arc(head.x, head.y, 14 * s, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  // Side-view figure for floor and lunge stretches.
+  function drawSide(P, alpha) {
+    if (!P || alpha <= 0.01) return;
+    const cx = W / 2, cy = H * 0.4, s = S * 0.95, y0 = cy + 112 * s;
+    const X = q => cx + q[0] * s, Y = q => y0 - q[1] * s;
+    const pt = q => [X(q), Y(q)];
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = 'rgba(236,230,210,.18)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(cx - 110 * s, y0 + 7 * s); ctx.lineTo(cx + 110 * s, y0 + 7 * s); ctx.stroke();
+    if (P.wall) { ctx.beginPath(); ctx.moveTo(cx + P.wall * s, y0 + 7 * s); ctx.lineTo(cx + P.wall * s, y0 - 175 * s); ctx.stroke(); }
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(242,198,109,.55)'; ctx.shadowBlur = 16;
+    ctx.lineWidth = 7 * s;
+    const line = (...qs) => { ctx.beginPath(); const [x0, y0_] = pt(qs[0]); ctx.moveTo(x0, y0_); qs.slice(1).forEach(q => ctx.lineTo(...pt(q))); ctx.stroke(); };
+    // far limbs dimmer, for depth
+    ctx.strokeStyle = 'rgba(236,230,210,.5)';
+    line(P.hip, P.k2, P.f2);
+    line(P.sh, P.el2, P.ha2);
+    ctx.strokeStyle = C.moon;
+    ctx.beginPath(); ctx.moveTo(...pt(P.hip)); ctx.quadraticCurveTo(...pt(P.mid), ...pt(P.sh)); ctx.stroke();
+    line(P.hip, P.k1, P.f1);
+    line(P.sh, P.el, P.ha);
+    ctx.fillStyle = C.moon; ctx.beginPath(); ctx.arc(X(P.head), Y(P.head), 13 * s, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawJar(t) {
+    const s = jar.s * S, x = jar.x, y = jar.y;
+    const w = 30 * s, h = 40 * s;
+    const lit = Math.min(1, flies.filter(f => f.state === 'jar').length / 12);
+    const rg = ctx.createRadialGradient(x, y, 0, x, y, 70 * s);
+    rg.addColorStop(0, `rgba(242,198,109,${0.05 + 0.2 * lit})`); rg.addColorStop(1, 'rgba(242,198,109,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(x, y, 70 * s, 0, TAU); ctx.fill();
+    ctx.save();
+    ctx.fillStyle = 'rgba(200,215,235,.07)'; ctx.strokeStyle = 'rgba(236,230,210,.55)'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x - w * 0.6, y - h * 0.85);
+    ctx.quadraticCurveTo(x - w, y - h * 0.75, x - w, y - h * 0.35);
+    ctx.lineTo(x - w, y + h * 0.75); ctx.quadraticCurveTo(x - w, y + h, x - w * 0.7, y + h);
+    ctx.lineTo(x + w * 0.7, y + h); ctx.quadraticCurveTo(x + w, y + h, x + w, y + h * 0.75);
+    ctx.lineTo(x + w, y - h * 0.35); ctx.quadraticCurveTo(x + w, y - h * 0.75, x + w * 0.6, y - h * 0.85);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // glass highlight
+    ctx.strokeStyle = 'rgba(236,230,210,.25)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - w * 0.7, y - h * 0.2); ctx.lineTo(x - w * 0.7, y + h * 0.5); ctx.stroke();
+    // lid
+    const lift = jar.open * 30 * s, tilt = jar.open * 0.5;
+    ctx.translate(x + jar.open * 18 * s, y - h * 0.95 - lift); ctx.rotate(tilt);
+    ctx.fillStyle = '#6b5640'; ctx.fillRect(-w * 0.7, -6 * s, w * 1.4, 10 * s);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let i = -3; i <= 3; i++) ctx.fillRect(i * w * 0.18 - 1, -6 * s, 1.5, 10 * s);
+    ctx.restore();
+  }
+  function drawFlies(t, dt) {
+    for (const f of flies) {
+      const tw = 0.55 + 0.45 * Math.sin(t * 2.2 + f.ph);
+      if (f.state === 'fly') {
+        f.t += dt / 1.8;
+        const k = ease(Math.min(1, f.t));
+        const end = jarPoint(f);
+        const mx = (f.sx + end.x) / 2, my = Math.min(f.sy, end.y) - 80 * S;
+        const x = (1 - k) * (1 - k) * f.sx + 2 * (1 - k) * k * mx + k * k * end.x;
+        const y = (1 - k) * (1 - k) * f.sy + 2 * (1 - k) * k * my + k * k * end.y;
+        f.x = x; f.y = y;
+        glow(x, y, f.bright ? 2.6 : 2, 0.9);
+        if (f.t >= 1) f.state = 'jar';
+      } else if (f.state === 'jar') {
+        if (!reduced) {
+          f.vu += (Math.random() - 0.5) * 0.02; f.vv += (Math.random() - 0.5) * 0.02;
+          f.vu *= 0.96; f.vv *= 0.96;
+          f.u += f.vu * dt * 8; f.v += f.vv * dt * 8;
+          if (Math.abs(f.u) > 0.8) { f.u = Math.sign(f.u) * 0.8; f.vu *= -1; }
+          if (Math.abs(f.v) > 0.8) { f.v = Math.sign(f.v) * 0.8; f.vv *= -1; }
+        }
+        const p = jarPoint(f);
+        glow(p.x, p.y, (f.bright ? 2.2 : 1.6) * Math.max(0.7, jar.s * 0.7), (f.bright ? 0.75 : 0.55) * tw + 0.2);
+      } else if (f.state === 'free') {
+        f.t += dt / 4;
+        if (f.t < 0) { const p = jarPoint(f); glow(p.x, p.y, 2.4, 0.6 * tw + 0.2); continue; }
+        const k = ease(Math.min(1, f.t));
+        const wob = Math.sin(f.t * 9 + f.ph) * 22 * (1 - k);
+        const x = lerp(f.sx, f.tx, k) + wob, y = lerp(f.sy, f.ty, k);
+        glow(x, y, lerp(2.4, 1.4, k), 0.85);
+        if (f.t >= 1) { f.state = 'star'; stars.push({ x: f.tx / W, y: f.ty / H, r: 1.3, ph: f.ph, sp: 0.6, gold: true, added: true, fade: 1 }); }
+      }
+    }
+  }
+
+  // ---------- Stories & coloring ----------
+  const STORIES = [
+    { title: 'The Long Way Home', body: [
+      'Tomás had spent ten years walking fast. Fast to the station, fast through lunch, fast into a career that everyone said was going well. He was thirty-eight and always slightly out of breath.',
+      'One evening the trains were cancelled, and instead of fuming in the queue for the replacement bus, he decided to walk. It was forty minutes. He had never once done it.',
+      'He passed a bakery that smelled of cardamom. A man on a balcony was playing the trumpet badly and happily. Children were drawing a hopscotch court in chalk, arguing about the rules. The sky over the rooftops turned peach, then lilac, then a deep, calm blue.',
+      'Somewhere around the canal he noticed his shoulders had come down from his ears.',
+      'He thought about all the times he had told himself to hurry up. Get promoted sooner. Settle down sooner. Be further along by now. He had been racing a version of himself who did not exist and would never be satisfied.',
+      'By the time he reached his door his feet ached and his head was quiet.',
+      'He walks home on Thursdays now, whatever the trains are doing. It does not make him any less ambitious. It just reminds him, once a week, that he is allowed to arrive at his own pace, and that the slow road has the best view.',
+    ]},
+    { title: 'The Sweater With the Mistake', body: [
+      'Helen spent the whole winter knitting a sweater. It was the first one she had ever tried, a deep green wool, and she worked on it every evening while the radio murmured.',
+      'On the last sleeve she found it. Twenty rows back, a dropped stitch had left a small, crooked ladder running up the cuff.',
+      'Her first instinct was to rip it all out. That was how she did things. The report rewritten at midnight. The dinner party apologised for, even when everyone had loved it. If it was not perfect, it did not count.',
+      'She sat with the needles in her lap for a long time.',
+      'Then she finished the sleeve exactly as it was, sewed the pieces together, and pulled it over her head. It was warm. It fitted. It smelled faintly of the lavender she kept in her yarn basket. Nobody, she realised, would ever notice the cuff unless she pointed at it.',
+      'She wore it to see her sister the next weekend. "You made that?" her sister said. "It is beautiful."',
+      'Helen opened her mouth to mention the mistake, and closed it again.',
+      '"Thank you," she said. "I did."',
+      'She still knows exactly where the crooked stitch is. She has started to think of it as her signature, proof that something can be flawed and finished and loved, all at once.',
+    ]},
+    { title: 'Dear Younger Me', body: [
+      'Owen found the old diary while clearing out his parents’ loft. He was sixteen in it, and furious with himself on every page. Too quiet. Too skinny. Stupid for saying that in class. Why can’t you just be normal.',
+      'He sat on a box of Christmas decorations and read the whole thing, and by the end his throat was tight.',
+      'He wanted to reach back through the years and put a hand on that boy’s shoulder.',
+      'That night he did the closest thing he could. He took out a sheet of paper and wrote a letter.',
+      'Dear Owen. I am sorry for how you spoke to yourself. You were not stupid. You were shy, and thoughtful, and you noticed things other people missed. The quiet you hated turned into the reason people trust you. The skinny arms carried you up mountains. The thing you said in class? Nobody remembers it. I promise.',
+      'He stopped, and read it back, and realised he could have written much the same letter to himself at forty-one. He was still saying the same things, just in grown-up words.',
+      'So he added one more line. And to the man reading this now: the same goes for you.',
+      'He keeps the letter in the back of the old diary. The two of them sit together on the shelf, the boy who was so hard on himself and the man who is learning, at last, to be on his side.',
+    ]},
+    { title: 'Plot Fourteen', body: [
+      'Farah’s allotment was the scruffiest on the row. Plot thirteen, next door, belonged to a retired engineer called Graham whose beans grew in perfect columns and whose paths were edged with a ruler.',
+      'All spring Farah compared. Her lettuces bolted. Her carrots were stubby. Slugs ate her marigolds in a single night. She began to dread going down there, which was ridiculous, because she had taken the plot to feel better.',
+      'One evening in July she arrived to find Graham sitting on her bench.',
+      '"I hope you don’t mind," he said. "Yours is the only plot with any bees."',
+      'She looked properly, for the first time in weeks. The borage she had forgotten to cut back was humming. The nasturtiums had sprawled everywhere in orange and red. A robin was working through the loose soil she had never got round to raking. It was not neat. It was alive.',
+      '"I spend so long keeping mine tidy," Graham said, "I forget to enjoy it."',
+      'They sat together until the light went, eating her stubby carrots, which turned out to be sweet.',
+      'Farah still has the scruffiest plot on the row. She has stopped apologising for it. Things grow in their own time and their own shape, she has decided, and that includes her.',
+    ]},
+    { title: 'A Table for One', body: [
+      'For years Lina had treated her birthday as something to get through. If no one made plans, she pretended not to mind. If someone did, she worried they were only being kind.',
+      'The year she turned thirty-five, everyone was busy. Her best friend was abroad. Her brother had a newborn. Instead of staying home with a takeaway and her phone face down, she did something that felt almost reckless. She booked a table for one at the little Italian place she had walked past a hundred times.',
+      'She wore the blue dress. She brought a novel and did not open it.',
+      'The waiter did not look at her with pity. He brought bread and good olive oil and asked if she was celebrating. "My birthday," she said, and felt brave saying it.',
+      'She ordered exactly what she wanted. Burrata. Pasta with lemon and too much parmesan. A glass of wine she had to look up. She watched the other tables, the couples and the families and the old man eating alone with his crossword, and felt part of the room rather than outside it.',
+      'At the end the waiter brought a small slice of cake with a single candle.',
+      'Lina laughed, and closed her eyes, and made a wish for herself. Then she blew it out and ate every crumb.',
+      'She goes back every birthday now, even when there are parties. It is her date with someone she has finally decided is worth celebrating.',
+    ]},
+    { title: 'Good Morning', body: [
+      'Kofi’s counsellor gave him homework that he found mortifying. Every morning, look in the mirror and say good morning to yourself as if you were glad to see you.',
+      'The first day he could not do it. He stood at the sink with his toothbrush and felt his face go hot. He said it under his breath to the tap instead.',
+      'The second day he managed to look up, mutter the words and look away.',
+      'It took about a fortnight before he could hold his own gaze while he said it. Even then it sounded sarcastic.',
+      'But somewhere in the third week something changed. He caught himself one morning, rumpled and puffy-eyed, and instead of the usual inventory of what was wrong, he just thought: oh, there you are.',
+      'He said it out loud. "Morning. There you are." And this time he meant it, a little.',
+      'It did not fix everything. He still had days when the voice in his head was cruel. But now there was another voice too, a quieter one, that sounded like a friend who had known him a long time and liked him anyway.',
+      'He still says it every morning. Sometimes he even smiles. The counsellor says that is the point. Not to feel wonderful every day, but to start each one on your own side.',
+    ]},
+    { title: 'The Spare Key', body: [
+      'Bea had been the one people called for thirty years. Lifts to the hospital. Soup for the sick. A spare room for whoever was between flats.',
+      'Then she had her knee replaced, and for six weeks she could not manage the stairs, the shopping or even a kettle without help.',
+      'She hated it. She apologised to the neighbour who brought her groceries, and to the friend who did her washing, and to the nurse who changed her dressing. She apologised so much that her friend Ruthie finally sat down on the end of her bed and took her hand.',
+      '"Bea," she said. "How many times have you done this for me?"',
+      'Bea thought about it. Ruthie’s divorce. Ruthie’s mother. The winter Ruthie’s boiler broke.',
+      '"Then let us do it for you," Ruthie said. "You are not a burden. You are a friend who needs a hand for a bit. That is allowed."',
+      'Something in Bea’s chest loosened. She stopped apologising and started saying thank you instead, which turned out to be much nicer for everyone.',
+      'When the knee had healed, she had a spare key cut and gave it to Ruthie. "For when I need you," she said. It was the first time in her life she had said those words, and she was surprised by how strong they made her feel.',
+    ]},
+    { title: 'Halfway Up', body: [
+      'Raj had been planning the climb for months. A famous ridge, the kind of hike people posted photos of from the summit cairn. He had trained. He had bought the boots.',
+      'Two hours in, halfway up, the cloud came down and his knee started to ache with a sharp, warning kind of pain.',
+      'Every part of him wanted to push on. Turning back felt like failing. He could already imagine telling people, and the small disappointed noise they would make.',
+      'He sat on a rock and ate a sandwich and listened to his body for once, instead of overruling it.',
+      'It was saying, quite clearly, not today.',
+      'So he turned round. And on the way down, slower, he noticed things he had marched past on the way up. A waterfall threading down a gully. Tiny white flowers in the moss. A pair of ravens tumbling in the wind, apparently for fun.',
+      'At the bottom he had a pint in the walkers’ pub and felt, to his surprise, proud. Not of the summit. Of the decision.',
+      'He went back the next summer with a strong knee and a clear day and made it to the top. It was lovely. But the hike he still thinks about is the one where he turned round, the day he learned that caring for yourself is not the same as giving up.',
+    ]},
+    { title: 'The Voice Note', body: [
+      'It was a grey Tuesday and Elena felt like a failure at everything. Work had gone badly. She had forgotten to call her mother. She had eaten crisps for dinner standing up.',
+      'Her phone buzzed. A voice note from her oldest friend, Nina, four minutes long.',
+      'She almost did not listen. She assumed it would be news, or a question. Instead Nina’s voice came through, a little self-conscious.',
+      '"I read this thing about telling people what you love about them while you can," she said. "So, um. Here goes."',
+      'And Nina listed things. The way Elena always remembered everyone’s coffee order. How she had driven four hours in the night when Nina’s dad was ill. Her terrible singing in the car. Her laugh, which Nina said could make a whole room feel lighter. The way she never, ever gave up on people.',
+      '"Anyway," Nina finished. "I just think you are brilliant. I don’t think you know that. Okay. Bye."',
+      'Elena sat on the kitchen floor and played it again. Then again.',
+      'It was strange hearing herself described like that. It sounded like someone she would like very much. She began to wonder why she had never thought to see herself through Nina’s eyes.',
+      'She saved the voice note to a folder called Keep. On hard days she still plays it, and lets someone who loves her remind her who she is.',
+    ]},
+    { title: 'Ten Minutes in the Car', body: [
+      'Ben worked nights on a hospital ward. He finished at seven in the morning, drove home, and walked straight into the noise of two children getting ready for school.',
+      'He loved them. But he arrived every morning wrung out and short-tempered, snapping about shoes and lunchboxes, then lying awake afterwards feeling guilty.',
+      'One morning, parked outside his house, he simply did not get out of the car.',
+      'He turned off the engine. He put his head back. He watched the frost melting on the windscreen, drop by drop, and listened to his own breathing slow down. He did not check his phone. He did not plan anything. For ten minutes he let himself be a person who had worked very hard and was very tired.',
+      'When he went inside, his daughter could not find her other shoe. He found that he could laugh about it.',
+      'He used to think that taking time for himself meant taking it from his family. Now he sees it the other way round. The ten minutes are not selfish. They are how he makes sure there is enough of him left to give.',
+      'He still sits in the car every morning. His wife calls it Dad’s quiet time and makes sure the kids leave him be. Sometimes his son waves from the window, and Ben waves back, and then takes one more slow breath before he goes in.',
+    ]},
+  ];
+  let storyIdx = Math.floor(Math.random() * STORIES.length);
+  const sheet = $('sheet'), sheetBody = $('sheet-body');
+  let sheetReturn = null;
+  function openSheet(kind) {
+    startSound(false);
+    sheetReturn = document.activeElement;
+    sheet.hidden = false; sheet.scrollTop = 0; sheetSince = Date.now();
+    if (kind === 'story') renderStory(); else renderColoring();
+    $('sheetClose').focus();
+  }
+  function closeSheet() { sheet.hidden = true; sheetSince = 0; if (sheetReturn && sheetReturn.focus) sheetReturn.focus(); }
+  $('sheetClose').addEventListener('click', closeSheet);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !sheet.hidden) closeSheet(); });
+  ['tStory', 'eStory'].forEach(id => $(id).addEventListener('click', () => openSheet('story')));
+  ['tColor', 'eColor'].forEach(id => $(id).addEventListener('click', () => openSheet('color')));
+
+  function renderStory() {
+    const st = STORIES[storyIdx];
+    $('sheet-title').textContent = `A story · ${storyIdx + 1} of ${STORIES.length}`;
+    sheetBody.innerHTML = '';
+    const art = document.createElement('article'); art.className = 'story';
+    const h = document.createElement('h4'); h.textContent = st.title; art.appendChild(h);
+    st.body.forEach(t => { const p = document.createElement('p'); p.textContent = t; art.appendChild(p); });
+    const fin = document.createElement('p'); fin.className = 'fin'; fin.textContent = '· · ·'; art.appendChild(fin);
+    const nav = document.createElement('div'); nav.className = 'story-nav';
+    const next = document.createElement('button'); next.className = 'btn ghost small'; next.textContent = 'Another story';
+    next.addEventListener('click', () => { storyIdx = (storyIdx + 1) % STORIES.length; renderStory(); sheet.scrollTop = 0; });
+    const done = document.createElement('button'); done.className = 'btn small'; done.textContent = 'Goodnight';
+    done.addEventListener('click', closeSheet);
+    nav.append(next, done); art.appendChild(nav);
+    sheetBody.appendChild(art);
+  }
+
+  const PAPER = '#232a52';
+  const PALETTE = ['#f5d9a8', '#f2c66d', '#c9a66b', '#e8875f', '#f0a986', '#c76b6b', '#d98ca0', '#e6b8d6', '#b9a3d9', '#9a7fd1', '#7a5c8e', '#8ea2e0', '#6b8fd6', '#3a4180', '#7cc0c4', '#5f9ea0', '#2f6f73', '#a8d8b9', '#9cc39a', '#4f7a63', '#8c6a4f', '#ece6d2', PAPER];
+  let paint = PALETTE[0];
+  // Coloring state: which pattern you are on and what you have filled. Kept per browser.
+  function loadColoring() {
+    try { const o = JSON.parse(localStorage.getItem('ffj-coloring') || 'null'); if (o && o.seed) return o; } catch (e) {}
+    return { seed: 1, fills: [] };
+  }
+  function saveColoring(o) { try { localStorage.setItem('ffj-coloring', JSON.stringify(o)); } catch (e) {} }
+  let coloring = loadColoring();
+
+  function rng(seed) {
+    let a = (seed * 2654435761) >>> 0;
+    return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  // Each seed makes a different mandala: rings of petals, beads and arcs, worked from the rim inward.
+  function mandalaShapes(seed) {
+    const R = rng(seed), pick = arr => arr[Math.floor(R() * arr.length)];
+    const out = [], P = (r, a) => [200 + r * Math.cos(a), 200 + r * Math.sin(a)].map(v => v.toFixed(2)).join(' ');
+    const circle = (cx, cy, r) => ({ c: [cx, cy, r] });
+    const petal = (r0, r1, a, w, sharp) => {
+      const rc = sharp ? r0 + (r1 - r0) * 0.45 : (r0 + r1) / 2 + (r1 - r0) * 0.15;
+      return { d: `M${P(r0, a)} Q${P(rc, a - w)} ${P(r1, a)} Q${P(rc, a + w)} ${P(r0, a)}Z` };
+    };
+    const sector = (r0, r1, a0, a1) => ({ d: `M${P(r1, a0)} A${r1} ${r1} 0 0 1 ${P(r1, a1)} L${P(r0, a1)} A${r0} ${r0} 0 0 0 ${P(r0, a0)}Z` });
+    const rot = R() * TAU;
+    let r = 188, first = true;
+    while (r > 42) {
+      const type = first ? pick(['beads', 'sector', 'petal']) : pick(['petal', 'petal2', 'sector', 'beads', 'petal']);
+      const n = pick(type === 'beads' || type === 'sector' ? [12, 16, 18, 24] : [6, 8, 10, 12, 16]);
+      const depth = Math.min(r - 26, type === 'beads' || type === 'sector' ? 22 + R() * 16 : 36 + R() * 34);
+      const inner = r - depth, off = rot + (R() < 0.5 ? 0 : Math.PI / n);
+      if (type !== 'sector') out.push(circle(200, 200, r)); // background disk, visible between shapes
+      if (type === 'sector') {
+        for (let k = 0; k < n; k++) out.push(sector(inner, r, off + k * TAU / n, off + (k + 1) * TAU / n));
+      } else if (type === 'beads') {
+        const mid = (inner + r) / 2, rad = Math.min((r - inner) / 2 - 2, Math.PI * mid / n * 0.82);
+        for (let k = 0; k < n; k++) { const a = off + k * TAU / n; out.push(circle(200 + mid * Math.cos(a), 200 + mid * Math.sin(a), rad)); }
+      } else {
+        const sharp = R() < 0.5, w = Math.PI / n * (sharp ? 1.05 : 1.25);
+        for (let k = 0; k < n; k++) out.push(petal(inner, r - 3, off + k * TAU / n, w, sharp));
+        if (type === 'petal2') for (let k = 0; k < n; k++) out.push(petal(inner, inner + (r - inner) * 0.6, off + (k + 0.5) * TAU / n, w * 0.6, !sharp));
+      }
+      r = inner; first = false;
+    }
+    out.push(circle(200, 200, r));
+    if (r > 26) out.push(circle(200, 200, r * 0.45));
+    return out;
+  }
+  function renderColoring() {
+    const seed = coloring.seed;
+    $('sheet-title').textContent = `Coloring · pattern ${seed}`;
+    sheetBody.innerHTML = '';
+    const wrap = document.createElement('div'); wrap.className = 'colorwrap';
+    const tip = document.createElement('p'); tip.textContent = 'Pick a color, then tap any shape. Finish one and a new pattern appears.';
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 400 400'); svg.id = 'mandala';
+    svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', `Coloring pattern ${seed}`);
+    const shapes = mandalaShapes(seed), fills = coloring.fills;
+    let done = false;
+    shapes.forEach((sh, i) => {
+      let el;
+      if (sh.c) { el = document.createElementNS(NS, 'circle'); el.setAttribute('cx', sh.c[0]); el.setAttribute('cy', sh.c[1]); el.setAttribute('r', sh.c[2]); }
+      else { el = document.createElementNS(NS, 'path'); el.setAttribute('d', sh.d); }
+      el.setAttribute('fill', fills[i] || PAPER);
+      el.addEventListener('click', () => {
+        if (done) return;
+        el.setAttribute('fill', paint); fills[i] = paint === PAPER ? null : paint; saveColoring(coloring);
+        if (shapes.every((_, j) => fills[j])) {
+          done = true;
+          svg.classList.add('finished');
+          tip.textContent = 'Finished. Here comes a new one…';
+          waterToday();
+          setTimeout(() => { coloring = { seed: seed + 1, fills: [] }; saveColoring(coloring); if (!sheet.hidden && $('mandala') === svg) renderColoring(); }, 2600);
+        }
+      });
+      svg.appendChild(el);
+    });
+    const sws = document.createElement('div'); sws.className = 'swatches';
+    PALETTE.forEach(col => {
+      const b = document.createElement('button'); b.className = 'sw'; b.style.background = col;
+      b.setAttribute('aria-label', col === PAPER ? 'Eraser' : 'Color ' + col);
+      b.setAttribute('aria-pressed', String(col === paint));
+      b.addEventListener('click', () => { paint = col; sws.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
+      sws.appendChild(b);
+    });
+    const nav = document.createElement('div'); nav.className = 'story-nav';
+    const clear = document.createElement('button'); clear.className = 'btn ghost small'; clear.textContent = 'Clear';
+    clear.addEventListener('click', () => { coloring.fills = []; saveColoring(coloring); renderColoring(); });
+    const skip = document.createElement('button'); skip.className = 'btn ghost small'; skip.textContent = 'New pattern';
+    skip.addEventListener('click', () => { coloring = { seed: seed + 1, fills: [] }; saveColoring(coloring); renderColoring(); });
+    nav.append(clear, skip);
+    wrap.append(tip, svg, sws, nav);
+    sheetBody.appendChild(wrap);
+  }
+
+
+  // ---------- Plant streak ----------
+  // One day counts when you finish a stretch & breathe session, finish a coloring page,
+  // or spend a minute with a story or coloring. Each day watered grows the plant; each
+  // skipped day shrinks it a little. Kept in this browser only.
+  const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const dayNum = k => { const [y, m, d] = k.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 864e5); };
+  const today = () => dayKey(new Date());
+  const GROW_MAX = 24, SHRINK = 0.6;
+  let plant = { g: 0, streak: 0, last: null, checked: null };
+  try { const o = JSON.parse(localStorage.getItem('ffj-plant') || 'null'); if (o) plant = { ...plant, ...o }; } catch (e) {}
+  const savePlant = () => { try { localStorage.setItem('ffj-plant', JSON.stringify(plant)); } catch (e) {} };
+  let missedNow = 0;
+  (function applySkips() {
+    const t = dayNum(today());
+    if (plant.last) {
+      const from = Math.max(dayNum(plant.last), plant.checked ? dayNum(plant.checked) : 0);
+      missedNow = Math.max(0, t - from - 1);
+      if (missedNow > 0) { plant.g = Math.max(0, plant.g - missedNow * SHRINK); plant.streak = 0; }
+    }
+    plant.checked = dayKey(new Date(Date.now() - 864e5));
+    savePlant();
+  })();
+  let plantFrom = Math.min(plant.g, 0.4), plantTo = plant.g + (missedNow > 0 ? 0 : 0), plantAnim = 0;
+  function waterToday() {
+    const t = today();
+    if (plant.last === t) return;
+    const yesterday = dayKey(new Date(Date.now() - 864e5));
+    plant.streak = plant.last === yesterday ? plant.streak + 1 : 1;
+    plant.last = t;
+    plantFrom = plantDisplay(); plant.g = Math.min(GROW_MAX, plant.g + 1); plantTo = plant.g; plantAnim = 0;
+    savePlant(); welcomeText();
+  }
+  function plantDisplay() { return lerp(plantFrom, plantTo, ease(Math.min(1, plantAnim))); }
+  function welcomeText() {
+    const n = plant.streak, el = $('welcome');
+    if (!plant.last) el.textContent = 'Hello. Come back each night and this little plant will grow.';
+    else if (plant.last === today()) el.textContent = `Watered tonight · ${n} ${n === 1 ? 'night' : 'nights'} in a row`;
+    else if (missedNow > 0) el.textContent = 'Welcome back. Your plant missed you, but it is still here.';
+    else el.textContent = `Welcome back · ${n} ${n === 1 ? 'night' : 'nights'} in a row. Water it tonight.`;
+  }
+  welcomeText();
+  // spend a minute with a story or coloring and it counts
+  let sheetSince = 0;
+  setInterval(() => { if (!sheet.hidden && sheetSince && Date.now() - sheetSince > 60000) waterToday(); }, 5000);
+
+  const pcv = $('plant'), pctx = pcv.getContext('2d');
+  (function sizePlant() { const d = Math.min(2, window.devicePixelRatio || 1); pcv.width = 150 * d; pcv.height = 160 * d; pctx.setTransform(d, 0, 0, d, 0, 0); })();
+  const BLOOMS = ['#f0a986', '#d98ca0', '#f2c66d', '#b9a3d9', '#e6b8d6'];
+  function drawPlant(g, t) {
+    const c = pctx, W2 = 150, base = 120;
+    c.clearRect(0, 0, W2, 160);
+    const Hs = 14 + Math.min(g, 14) * 6.4;
+    const sway = (reduced ? 0 : Math.sin(t * 0.8)) * 3.5 * (Hs / 104);
+    const at = u => ({ x: 75 + sway * u * u, y: base - Hs * u });
+    // soft glow behind once it blooms
+    if (g > 3) {
+      const rg = c.createRadialGradient(75, base - Hs * 0.7, 0, 75, base - Hs * 0.7, 70);
+      rg.addColorStop(0, `rgba(242,198,109,${Math.min(0.16, (g - 3) * 0.015)})`); rg.addColorStop(1, 'rgba(242,198,109,0)');
+      c.fillStyle = rg; c.fillRect(0, 0, W2, 160);
+    }
+    // stem
+    c.strokeStyle = '#6e9a73'; c.lineCap = 'round'; c.lineWidth = 2.6 + Math.min(g, 12) * 0.12;
+    c.beginPath(); c.moveTo(75, base);
+    for (let u = 0.1; u <= 1.001; u += 0.1) { const p = at(u); c.lineTo(p.x, p.y); }
+    c.stroke();
+    // leaves, alternating sides, each unfurling as g passes its threshold
+    const nL = Math.min(10, Math.ceil(g * 0.9 + 1));
+    for (let i = 0; i < nL; i++) {
+      const k = Math.max(0, Math.min(1, g * 0.9 + 1 - i));
+      const u = nL === 1 ? 0.75 : 0.18 + 0.72 * i / (nL - 1 || 1);
+      const p = at(u), side = i % 2 ? 1 : -1;
+      const len = (9 + Math.min(g, 10) * 1.1) * (1 - 0.35 * u) * k;
+      const ang = side * (1.0 - 0.25 * u) + (reduced ? 0 : Math.sin(t * 1.1 + i) * 0.05);
+      c.save(); c.translate(p.x, p.y); c.rotate(-Math.PI / 2 + ang);
+      c.fillStyle = i % 3 === 0 ? '#86b48c' : '#7aa982';
+      c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(len * 0.45, -len * 0.42, len, 0); c.quadraticCurveTo(len * 0.45, len * 0.42, 0, 0); c.fill();
+      c.strokeStyle = 'rgba(14,18,40,.25)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(0, 0); c.lineTo(len * 0.85, 0); c.stroke();
+      c.restore();
+    }
+    // flowers: a bud first, then blooms at the top and on twigs from the leaf nodes
+    const nF = g < 2 ? 0 : Math.min(9, Math.ceil((g - 1) / 2));
+    for (let j = 0; j < nF; j++) {
+      const k = Math.max(0, Math.min(1, (g - 1) / 2 - j));
+      let fx, fy;
+      if (j === 0) { const p = at(1); fx = p.x; fy = p.y; }
+      else {
+        const u = Math.max(0.3, 0.92 - j * 0.09), p = at(u), side = j % 2 ? 1 : -1;
+        fx = p.x + side * (12 + j); fy = p.y - 10;
+        c.strokeStyle = '#6e9a73'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(p.x, p.y); c.quadraticCurveTo(p.x + side * 4, fy, fx, fy); c.stroke();
+      }
+      const open = g >= 3 ? Math.min(1, k * 1.2) : 0;
+      const r = (3 + Math.min(g, 20) * 0.22) * (0.5 + 0.5 * k);
+      if (open < 0.2) { c.fillStyle = '#d98ca0'; c.beginPath(); c.ellipse(fx, fy, 2.6, 4, 0, 0, TAU); c.fill(); continue; }
+      const col = BLOOMS[j % BLOOMS.length];
+      c.save(); c.translate(fx, fy); c.rotate(j + (reduced ? 0 : Math.sin(t * 0.6 + j) * 0.08));
+      c.fillStyle = col; c.globalAlpha = 0.95;
+      for (let q = 0; q < 5; q++) { c.rotate(TAU / 5); c.beginPath(); c.ellipse(0, -r * 0.62 * open, r * 0.42, r * 0.62 * open, 0, 0, TAU); c.fill(); }
+      c.globalAlpha = 1; c.fillStyle = '#f2c66d'; c.beginPath(); c.arc(0, 0, r * 0.32, 0, TAU); c.fill();
+      c.restore();
+    }
+    // pot
+    c.fillStyle = '#9a6248';
+    c.beginPath(); c.moveTo(48, base + 6); c.lineTo(102, base + 6); c.lineTo(95, 156); c.lineTo(55, 156); c.closePath(); c.fill();
+    c.fillStyle = '#b07457'; c.fillRect(44, base - 2, 62, 10);
+    c.fillStyle = '#3b2a22'; c.fillRect(48, base - 2, 54, 3);
+    c.fillStyle = 'rgba(255,255,255,.08)'; c.fillRect(54, base + 10, 5, 40);
+  }
+
+  function finishSession() {
+    mode = 'jar'; clock = 0;
+    waterToday();
+    if (wake) { wake.release().catch(() => {}); wake = null; }
+    padLevel(0.003);
+    show($('hud'), false); show($('hint'), true);
+    $('hint').textContent = '';
+    caption('All done', `${flies.length} fireflies`, 'Tap the jar to let them go.');
+  }
+  // ---------- Loop ----------
+  let last = performance.now(), time = 0;
+  function frame(now) {
+    let dt = Math.min(0.1, (now - last) / 1000); last = now;
+    time += dt;
+    if (paused) dt = 0;
+    clock += dt;
+    schedulePiano();
+
+    // jar placement
+    const big = mode === 'jar' || mode === 'released';
+    const tx = big ? W / 2 : W - 50 * S - 10, ty = big ? H * 0.42 : H - 66 * S - 20;
+    const ts = big ? 2.1 : 0.8;
+    const jk = 1 - Math.exp(-dt * 2.2);
+    if (!jar.x) { jar.x = tx; jar.y = ty; }
+    jar.x = lerp(jar.x, tx, jk); jar.y = lerp(jar.y, ty, jk); jar.s = lerp(jar.s, ts, jk);
+    jar.open = lerp(jar.open, mode === 'released' ? 1 : 0, 1 - Math.exp(-dt * 3));
+
+    drawSky(time);
+
+    if (mode === 'stretch') {
+      const total = programTotal();
+      const [i, lt] = stretchAt(clock), st = PROGRAM[i];
+      if (i !== lastStretch) {
+        if (lastStretch >= 0) spawnFly(W / 2, H * 0.36, true);
+        poseFrom = { ...pose }; sideFrom = sideCur; lastStretch = i;
+      }
+      padLevel(0.005);
+      const k = ease(Math.min(1, lt / 3.2));
+      if (st.front !== undefined) pose = lerpPose(poseFrom, targetPose(st.front, lt / 2), k);
+      else { const tg = sideTarget(st, lt); sideCur = sideFrom ? lerpSide(sideFrom, tg, k) : tg; }
+      viewMix = lerp(viewMix, st.side ? 1 : 0, 1 - Math.exp(-dt * 1.6));
+      $('b2').style.width = Math.min(100, clock / total * 100) + '%';
+      if (clock >= total) {
+        spawnFly(W / 2, H * 0.4, true);
+        $('b2').style.width = '100%';
+        if (withBreath) {
+          mode = 'breathe'; clock = 0; lastCycle = 0; syncGood = 0; pressedAny = false;
+          $('hint').textContent = 'Optional: press and hold as you breathe in, let go as you breathe out.';
+        } else finishSession();
+      } else {
+        drawFigure(pose, lt / st.dur, 1 - viewMix);
+        drawSide(sideCur, viewMix);
+        if (!paused) caption(`Stretch ${i + 1} of ${PROGRAM.length}`, st.name, st.cue);
+      }
+    }
+    if (mode === 'breathe') {
+      const cyc = Math.floor(clock / CYCLE), ct = clock - cyc * CYCLE;
+      const inhale = ct < BREATH_IN;
+      const b = inhale ? ease(ct / BREATH_IN) : 1 - ease((ct - BREATH_IN) / BREATH_OUT);
+      if ((inhale && pressed) || (!inhale && !pressed)) syncGood += dt;
+      if (cyc > lastCycle) {
+        spawnFly(W / 2, H * 0.4, pressedAny && syncGood / CYCLE > 0.7);
+        lastCycle = cyc; syncGood = 0; pressedAny = false;
+      }
+      padLevel(0.004 + 0.016 * b);
+      $('b1').style.width = Math.min(100, clock / (CYCLE * BREATHS) * 100) + '%';
+      if (clock >= CYCLE * BREATHS) {
+        finishSession();
+      } else {
+        drawOrb(b, time);
+        if (!paused) caption(`Breath ${cyc + 1} of ${BREATHS}`, inhale ? 'Breathe in' : 'Breathe out',
+          inhale ? 'Through your nose, slow and easy.' : 'Let it all go, a little longer than you breathed in.');
+      }
+    }
+    if (paused && (mode === 'breathe' || mode === 'stretch')) caption('Paused', 'Take your time', 'Press play when you are ready.');
+    if (mode === 'released' && clock - releaseAt > 2) {
+      caption('Lights out', 'Goodnight.', 'They will keep the sky lit. Put the phone down. You did enough today.');
+      show($('endbtns'), true);
+    }
+
+    if (mode !== 'title') drawJar(time);
+    drawFlies(time, dt || (paused ? 0 : dt));
+    if (mode === 'title') {
+      plantAnim += dt / 2.2;
+      drawPlant(plantDisplay(), time);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>

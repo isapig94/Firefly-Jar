@@ -458,6 +458,17 @@ canvas#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: bloc
     $('mute').setAttribute('aria-pressed', String(!soundOn));
   }
   drawMute();
+  // Start the piano as soon as the page opens. Phones and most browsers hold sound back
+  // until the first touch or key press, so the very first tap anywhere also starts it.
+  const KICK_EVENTS = ['pointerdown', 'touchend', 'click', 'keydown'];
+  function kickSound() {
+    if (!soundOn) return;
+    startSound(false);
+    if (ac && ac.state !== 'running') ac.resume().catch(() => {});
+    else if (ac) KICK_EVENTS.forEach(ev => removeEventListener(ev, kickSound, true));
+  }
+  KICK_EVENTS.forEach(ev => addEventListener(ev, kickSound, true));
+  setTimeout(kickSound, 0);
   $('mute').addEventListener('click', () => {
     soundOn = !soundOn; drawMute();
     try { localStorage.setItem('ffj-mute', soundOn ? '0' : '1'); } catch (e) {}
@@ -1025,15 +1036,23 @@ canvas#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: bloc
   // ---------- Plant streak ----------
   // One day counts when you finish a stretch & breathe session, finish a coloring page,
   // or spend a minute with a story or coloring. Each day watered grows the plant; each
-  // skipped day shrinks it a little. Kept in this browser only.
+  // skipped day shrinks it a little. Kept in this browser only. A "night" runs until 4am,
+  // so a session just after midnight still counts for the evening before.
+  const NIGHT_SHIFT = 4 * 36e5;
   const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const dayNum = k => { const [y, m, d] = k.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 864e5); };
-  const today = () => dayKey(new Date());
+  const today = () => dayKey(new Date(Date.now() - NIGHT_SHIFT));
+  const yesterdayKey = () => dayKey(new Date(Date.now() - NIGHT_SHIFT - 864e5));
   const GROW_MAX = 24, SHRINK = 0.6;
   let plant = { g: 0, streak: 0, last: null, checked: null };
   try { const o = JSON.parse(localStorage.getItem('ffj-plant') || 'null'); if (o) plant = { ...plant, ...o }; } catch (e) {}
-  const savePlant = () => { try { localStorage.setItem('ffj-plant', JSON.stringify(plant)); } catch (e) {} };
-  let missedNow = 0;
+  let canSave = false;
+  const savePlant = () => {
+    try { const v = JSON.stringify(plant); localStorage.setItem('ffj-plant', v); canSave = localStorage.getItem('ffj-plant') === v; } catch (e) { canSave = false; }
+  };
+  // ask the browser not to clear this site's storage when space runs low
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist().catch(() => {}); } catch (e) {}
+  let missedNow = 0, gBefore = plant.g;
   (function applySkips() {
     const t = dayNum(today());
     if (plant.last) {
@@ -1041,15 +1060,15 @@ canvas#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: bloc
       missedNow = Math.max(0, t - from - 1);
       if (missedNow > 0) { plant.g = Math.max(0, plant.g - missedNow * SHRINK); plant.streak = 0; }
     }
-    plant.checked = dayKey(new Date(Date.now() - 864e5));
+    plant.checked = yesterdayKey();
     savePlant();
   })();
-  let plantFrom = Math.min(plant.g, 0.4), plantTo = plant.g + (missedNow > 0 ? 0 : 0), plantAnim = 0;
+  // open at the size it was last time (shrinking gently if a night was missed), not from a seed
+  let plantFrom = gBefore, plantTo = plant.g, plantAnim = 0;
   function waterToday() {
     const t = today();
     if (plant.last === t) return;
-    const yesterday = dayKey(new Date(Date.now() - 864e5));
-    plant.streak = plant.last === yesterday ? plant.streak + 1 : 1;
+    plant.streak = plant.last === yesterdayKey() ? plant.streak + 1 : 1;
     plant.last = t;
     plantFrom = plantDisplay(); plant.g = Math.min(GROW_MAX, plant.g + 1); plantTo = plant.g; plantAnim = 0;
     savePlant(); welcomeText();
@@ -1057,7 +1076,8 @@ canvas#sky { position: fixed; inset: 0; width: 100%; height: 100%; display: bloc
   function plantDisplay() { return lerp(plantFrom, plantTo, ease(Math.min(1, plantAnim))); }
   function welcomeText() {
     const n = plant.streak, el = $('welcome');
-    if (!plant.last) el.textContent = 'Hello. Come back each night and this little plant will grow.';
+    if (!canSave) el.textContent = 'This browser is not letting the app save, so the plant cannot remember you yet.';
+    else if (!plant.last) el.textContent = 'Hello. Come back each night and this little plant will grow.';
     else if (plant.last === today()) el.textContent = `Watered tonight · ${n} ${n === 1 ? 'night' : 'nights'} in a row`;
     else if (missedNow > 0) el.textContent = 'Welcome back. Your plant missed you, but it is still here.';
     else el.textContent = `Welcome back · ${n} ${n === 1 ? 'night' : 'nights'} in a row. Water it tonight.`;

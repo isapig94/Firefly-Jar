@@ -1,5 +1,5 @@
 // Firefly Jar offline cache. Bump VERSION whenever you upload changed files.
-const VERSION = 'firefly-jar-v1';
+const VERSION = 'firefly-jar-v4';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
